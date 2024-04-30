@@ -15,6 +15,7 @@ from discord_bots.checks import is_admin_app_command, is_command_channel
 from discord_bots.cogs.base import BaseCog
 from discord_bots.models import Map, Queue, Rotation, RotationMap, Session
 from discord_bots.utils import update_next_map_to_map_after_next
+from discord_bots.views.configure_rotation import RotationConfigureView
 
 _log = logging.getLogger(__name__)
 
@@ -162,6 +163,61 @@ class RotationCommands(BaseCog):
                         description=f"{map.short_name} added to {rotation.name} at ordinal {ordinal}",
                         colour=Colour.green(),
                     )
+                )
+
+    @group.command(name="configure", description="Create/Edit a rotation")
+    @app_commands.check(is_admin_app_command)
+    @app_commands.check(is_command_channel)
+    @app_commands.describe(rotation_name="New or existing rotation")
+    async def configure(self, interaction: Interaction, rotation_name: str):
+        assert interaction.guild
+
+        new_rotation: bool = False
+        session: SQLAlchemySession
+        with Session() as session:
+            rotation: Rotation | None = (
+                session.query(Rotation)
+                .filter(Rotation.name.ilike(rotation_name))
+                .first()
+            )
+            if not rotation:
+                new_rotation = True
+                rotation = Rotation(
+                    name=rotation_name
+                )
+
+            configure_view = RotationConfigureView(interaction, rotation)
+            configure_view.embed = Embed(
+                description=f"**{rotation.name}** Category Configure\n-----",
+                colour=Colour.blue(),
+            )
+            await interaction.response.send_message(
+                embed=configure_view.embed,
+                view=configure_view,
+                ephemeral=True,
+            )
+
+            await configure_view.wait()
+            if configure_view.value:
+                if new_rotation:
+                    session.add(rotation)
+                session.commit()
+                await interaction.delete_original_response()
+                await interaction.followup.send(
+                    embed=Embed(
+                        description=f"**{configure_view.rotation.name}** has been configured!",
+                        colour=Colour.green(),
+                    ),
+                    ephemeral=True,
+                )
+            else:
+                await interaction.delete_original_response()
+                await interaction.followup.send(
+                    embed=Embed(
+                        description=f"**{rotation_name}** configuration cancelled",
+                        colour=Colour.red(),
+                    ),
+                    ephemeral=True,
                 )
 
     @group.command(
@@ -515,6 +571,7 @@ class RotationCommands(BaseCog):
 
     @addrotation.autocomplete("rotation_name")
     @addrotationmap.autocomplete("rotation_name")
+    @configure.autocomplete("rotation_name")
     @removerotation.autocomplete("rotation_name")
     @removerotationmap.autocomplete("rotation_name")
     @setrotationmapordinal.autocomplete("rotation_name")
