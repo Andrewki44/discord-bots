@@ -360,6 +360,60 @@ class MapCommands(BaseCog):
                     ephemeral=True,
                 )
 
+    @group.command(name="configure", description="Create/Edit a map")
+    @app_commands.check(is_admin_app_command)
+    @app_commands.check(is_command_channel)
+    @app_commands.describe(map_name="New or existing map")
+    async def configure(self, interaction: Interaction, map_name: str):
+        assert interaction.guild
+
+        new_map: bool = False
+        session: SQLAlchemySession
+        with Session() as session:
+            map: Map | None = (
+                session.query(Map).filter(Map.full_name.ilike(map_name)).first()
+            )
+            if not map:
+                new_map = True
+                map = Map(
+                    short_name="",
+                    full_name=map_name,
+                )
+
+            configure_view = MapConfigureView(interaction, map)
+            configure_view.embed = Embed(
+                description=f"**{map.full_name} ({map.short_name})** Map Configure\n-----",
+                colour=Colour.blue(),
+            )
+            await interaction.response.send_message(
+                embed=configure_view.embed,
+                view=configure_view,
+                ephemeral=True,
+            )
+
+            await configure_view.wait()
+            if configure_view.value:
+                if new_map:
+                    session.add(map)
+                session.commit()
+                await interaction.delete_original_response()
+                await interaction.followup.send(
+                    embed=Embed(
+                        description=f"**{configure_view.map.full_name} ({configure_view.map.short_name})** has been configured!",
+                        colour=Colour.green(),
+                    ),
+                    ephemeral=True,
+                )
+            else:
+                await interaction.delete_original_response()
+                await interaction.followup.send(
+                    embed=Embed(
+                        description=f"**{map.full_name} ({map.short_name})** configuration cancelled",
+                        colour=Colour.red(),
+                    ),
+                    ephemeral=True,
+                )
+
     @group.command(name="remove", description="Remove a map from the map pool")
     @app_commands.check(is_admin_app_command)
     @app_commands.check(is_command_channel)
