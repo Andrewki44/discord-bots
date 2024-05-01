@@ -188,7 +188,7 @@ class RotationCommands(BaseCog):
 
             configure_view = RotationConfigureView(interaction, rotation)
             configure_view.embed = Embed(
-                description=f"**{rotation.name}** Category Configure\n-----",
+                description=f"**{rotation.name}** Rotation Configure\n-----",
                 colour=Colour.blue(),
             )
             await interaction.response.send_message(
